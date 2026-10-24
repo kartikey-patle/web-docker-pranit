@@ -1,0 +1,36 @@
+name: Deploy to VPS (optional)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Configure the repository secrets described in README.md before enabling this workflow.
+# It connects to a server you own and runs Docker Compose there.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ vars.ENABLE_VPS_DEPLOY == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || '22' }}
+          script: |
+            set -eu
+            mkdir -p "${{ vars.VPS_APP_DIR || '/opt/github-actions-docker-demo' }}"
+            cd "${{ vars.VPS_APP_DIR || '/opt/github-actions-docker-demo' }}"
+            if [ ! -d .git ]; then
+              git clone "${{ vars.REPOSITORY_CLONE_URL }}" .
+            else
+              git fetch origin
+              git reset --hard origin/main
+            fi
+            docker compose up -d --build --remove-orphans
+            docker image prune -f
